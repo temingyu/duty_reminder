@@ -23,7 +23,8 @@ from PIL import Image, ImageDraw
 import pystray
 from pystray import MenuItem as item
 import atexit
-import pandas as pd  # 需要pip install pandas openpyxl
+import pandas as pd
+import winreg  # 用于开机自启动注册表操作
 
 class DutyReminderApp:
     
@@ -72,10 +73,8 @@ class DutyReminderApp:
         """加载配置数据"""
         # 获取可执行文件所在目录
         if getattr(sys, 'frozen', False):
-            # 如果是打包后的可执行文件
             app_dir = os.path.dirname(sys.executable)
         else:
-            # 如果是开发环境
             app_dir = os.path.dirname(os.path.abspath(__file__))
         
         self.config_file = os.path.join(app_dir, "duty_config.json")
@@ -514,6 +513,12 @@ class DutyReminderApp:
         self.resize_btn.pack(fill='x', pady=2)
         self.font_resize_btn = ttk.Button(switch_frame, text="调整字体大小", command=lambda w=window: self.open_font_resize_window(w))
         self.font_resize_btn.pack(fill='x', pady=2)
+        
+        # ---------- 新增开机自启动开关 ----------
+        autostart_status = "开" if self.check_autostart() else "关"
+        self.autostart_btn = ttk.Button(switch_frame, text=f"开机自启: {autostart_status}", command=self.toggle_autostart)
+        self.autostart_btn.pack(fill='x', pady=2)
+        
         ttk.Label(control_frame, text="Excel导入说明：文件中第一列应包含姓名，每行一个姓名", font=("微软雅黑", 8), foreground="gray").pack(pady=(10, 0))
         
         main_frame.columnconfigure(0, weight=1)
@@ -530,6 +535,68 @@ class DutyReminderApp:
         window.protocol("WM_DELETE_WINDOW", lambda: self.hide_main_window(window))
         return window
     
+    # ============== 开机自启动相关方法 ==============
+    def _get_exe_path(self):
+        """获取当前可执行文件的完整路径，用于注册表"""
+        if getattr(sys, 'frozen', False):
+            return sys.executable
+        # 开发环境返回 python 脚本路径
+        return os.path.abspath(sys.argv[0])
+    
+    def check_autostart(self):
+        """检查是否已设置为开机自启"""
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                 0, winreg.KEY_READ)
+            value, _ = winreg.QueryValueEx(key, "值日提醒")
+            winreg.CloseKey(key)
+            return value == self._get_exe_path()
+        except FileNotFoundError:
+            return False
+        except Exception as e:
+            print(f"检查开机自启状态失败: {e}")
+            return False
+    
+    def toggle_autostart(self):
+        """切换开机自启状态"""
+        if self.check_autostart():
+            self._remove_autostart()
+        else:
+            self._add_autostart()
+        # 更新按钮文字
+        status = "开" if self.check_autostart() else "关"
+        self.autostart_btn.config(text=f"开机自启: {status}")
+    
+    def _add_autostart(self):
+        """添加开机自启注册表项"""
+        try:
+            exe_path = self._get_exe_path()
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "值日提醒", 0, winreg.REG_SZ, exe_path)
+            winreg.CloseKey(key)
+            messagebox.showinfo("成功", "已开启开机自启")
+        except Exception as e:
+            messagebox.showerror("错误", f"设置开机自启失败: {e}")
+    
+    def _remove_autostart(self):
+        """删除开机自启注册表项"""
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                 0, winreg.KEY_SET_VALUE)
+            winreg.DeleteValue(key, "值日提醒")
+            winreg.CloseKey(key)
+            messagebox.showinfo("成功", "已关闭开机自启")
+        except FileNotFoundError:
+            # 本来就没设置，忽略
+            pass
+        except Exception as e:
+            messagebox.showerror("错误", f"取消开机自启失败: {e}")
+    # ============================================
+
     def set_override_duty(self, window):
         """设置覆盖值日人员"""
         task_key = self.get_selected_task_key()
@@ -680,7 +747,12 @@ class DutyReminderApp:
         if hasattr(self, 'floating_btn'):
             status = "开" if task_data['floating_enabled'] else "关"
             self.floating_btn.config(text=f"浮窗显示: {status}")
+        # 更新自启动按钮状态，以防外部修改了注册表
+        if hasattr(self, 'autostart_btn'):
+            status = "开" if self.check_autostart() else "关"
+            self.autostart_btn.config(text=f"开机自启: {status}")
     
+    # 以下方法保持原样，仅复制过来确保完整
     def open_custom_voice_window(self, window):
         """打开自定义语音提醒内容窗口"""
         task_key = self.get_selected_task_key()
