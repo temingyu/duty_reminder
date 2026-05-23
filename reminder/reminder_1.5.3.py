@@ -31,20 +31,30 @@ from logging.handlers import RotatingFileHandler
 
 # ========== 全局日志配置：捕获所有控制台输出 ==========
 class StreamToLogger:
-    """将标准输出/错误流重定向到日志"""
     def __init__(self, logger, log_level=logging.INFO):
         self.logger = logger
         self.log_level = log_level
         self.linebuf = ''
 
     def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            if line.strip():  # 只记录非空行
-                self.logger.log(self.log_level, line.rstrip())
+        try:
+            # 防止递归调用：如果 logger 的 handler 正在处理本条记录，直接返回
+            if getattr(self.logger, '_in_emit', False):
+                return
+            for line in buf.rstrip().splitlines():
+                if line.strip():
+                    self.logger._in_emit = True   # 标记正在处理
+                    self.logger.log(self.log_level, line.rstrip())
+                    self.logger._in_emit = False
+        except AttributeError:
+            # 如果 self.logger 为 None 或没有 _in_emit 属性，忽略
+            pass
+        except Exception:
+            pass
 
     def flush(self):
         pass
-
+    
 def setup_global_logging():
     """全局日志配置：捕获所有print和异常输出"""
     # 确定日志文件路径（程序同目录的 logs 目录下）
@@ -1540,43 +1550,43 @@ class DutyReminderApp:
 
     def quit_app(self, icon=None, item=None):
         """退出整个应用"""
-        self.logger.info("=" * 80)
+        self.self.logger.info("=" * 80)logger.info("=" * 80)
         self.logger.info("【程序退出】用户请求退出程序...")
         self.cleanup()
         if hasattr(self, 'icon'):
             self.icon.stop()
-        self.logger.info("【程序退出】程序已完全退出")
-        self.logger.info("=" * 80)
+        self.self.logger.info("【程序退出】程序已完全退出")logger.info("【程序退出】程序已完全退出")
+        self.self.logger.info("=" * 80)logger.info("=" * 80)
         self.root.quit()
 
-    def cleanup(self):
+       def清理(自我):def cleanup(self):
         """清理资源：关闭定时器、保存浮窗位置等"""
         try:
             if hasattr(self, 'scheduler') and self.scheduler.running:
                 self.scheduler.shutdown(wait=True)
                 self.logger.info("【资源清理】定时调度器已关闭")
-        except Exception as e:
+        except Exception as   作为 e:
             self.logger.error(f"【资源清理】调度器关闭出错: {e}")
-        for task_key, floating_widget in self.floating_widgets.items():
-            task_data = self.task_groups[task_key]
-            task_data['floating_x'] = floating_widget.winfo_x()
-            task_data['floating_y'] = floating_widget.winfo_y()
-            if 'font_size_factor' not in task_data:
-                task_data['font_size_factor'] = 1.0
+        for task_key, floating_widget in   在 self.floating_widgets.items():
+            task_data = self.Task_data = self.task_groups[task_key]task_groups[task_key]
+            task_dataTask_data ['floating_x'] = floating_widget.winfo_x（）['floating_x'] = floating_widget.winfo_x()
+            task_dataTask_data ['floating_y'] = floating_widget.winfo_y（）['floating_y'] = floating_widget.winfo_y()
+            如果‘font_size_factor’不在task_data中：if 'font_size_factor' not in   在 task_data:
+                task_dataTask_data ['font_size_factor'] = 1.0['font_size_factor'] = 1.0
         self.save_data()
         self.logger.info("【资源清理】配置已保存，浮窗位置已记录")
 
-def main():
-    try:
-        app = DutyReminderApp()
+def main   主要():
+       试一试:try:
+        app =    app = DutyReminderApp（）DutyReminderApp()
         app.root.mainloop()
     except KeyboardInterrupt:
         global_logger.info("【程序中断】检测到键盘中断 (Ctrl+C)")
-        if 'app' in locals():
+        if 'app' in   在 locals():
             app.cleanup()
-    except Exception as e:
+    except Exception as   作为 e:
         global_logger.error(f"【程序异常】程序运行出错: {e}", exc_info=True)
         raise
 
 if __name__ == "__main__":
-    main()
+    main   主要()
