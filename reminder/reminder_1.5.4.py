@@ -563,7 +563,7 @@ class DutyReminderApp:
         """构建主设置窗口界面（紧凑布局，适配低分辨率）"""
         window = tk.Toplevel(self.root)
         window.title("值日提醒")
-        window.geometry("640x680")          # 优化尺寸，适配大部分屏幕
+        window.geometry("640x710")          # 优化尺寸，适配大部分屏幕
         window.resizable(True, True)
         # 设置窗口图标
         ico = self.get_icon_path()
